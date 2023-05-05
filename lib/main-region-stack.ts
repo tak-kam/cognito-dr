@@ -51,11 +51,13 @@ export class MainRegionStack extends cdk.Stack {
       },
     });
 
+    // create Role for Lambda
     const postConfirmationLambdaRole = new cdk.aws_iam.Role(this, "postConfirmationLambdaRole", {
       assumedBy: new cdk.aws_iam.ServicePrincipal("lambda.amazonaws.com"),
       managedPolicies: [cdk.aws_iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole")],
     });
 
+    // add Policy for PutItem
     const dynamoDbPutItemPolicy = new cdk.aws_iam.Policy(this, "dynamoDbPutItem", {
       statements: [
         new cdk.aws_iam.PolicyStatement({
@@ -67,6 +69,7 @@ export class MainRegionStack extends cdk.Stack {
 
     dynamoDbPutItemPolicy.attachToRole(postConfirmationLambdaRole);
 
+    // create Lambda for PutItem
     const postConfirmationLambda = new NodejsFunction(this, "postConfirmation", {
       entry: "lambda/post-confirmation/index.ts",
       handler: "handler",
