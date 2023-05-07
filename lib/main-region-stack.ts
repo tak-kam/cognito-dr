@@ -6,6 +6,9 @@ import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import { UserPool, CfnUserPool } from "aws-cdk-lib/aws-cognito";
 import { BACKUP_REGION, MAIN_REGION } from "../bin/cognito-dr";
 import { DYNAMODB_TABLE_NAME } from "../const";
+import { aws_apigateway } from "aws-cdk-lib";
+import { LambdaIntegration, RestApi } from "aws-cdk-lib/aws-apigateway";
+import { ManagedPolicy, Policy, PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam";
 
 export class MainRegionStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -52,22 +55,50 @@ export class MainRegionStack extends cdk.Stack {
     });
 
     // create Role for Lambda
-    const postConfirmationLambdaRole = new cdk.aws_iam.Role(this, "postConfirmationLambdaRole", {
-      assumedBy: new cdk.aws_iam.ServicePrincipal("lambda.amazonaws.com"),
-      managedPolicies: [cdk.aws_iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole")],
+    const postConfirmationLambdaRole = new Role(this, "postConfirmationLambdaRole", {
+      assumedBy: new ServicePrincipal("lambda.amazonaws.com"),
+      managedPolicies: [ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole")],
     });
-
     // add Policy for PutItem
-    const dynamoDbPutItemPolicy = new cdk.aws_iam.Policy(this, "dynamoDbPutItem", {
+    const dynamoDbPutItemPolicy = new Policy(this, "dynamoDbPutItem", {
       statements: [
-        new cdk.aws_iam.PolicyStatement({
+        new PolicyStatement({
           actions: ["dynamodb:PutItem"],
           resources: [dynamoDbGlobalTable.attrArn],
         }),
       ],
     });
-
     dynamoDbPutItemPolicy.attachToRole(postConfirmationLambdaRole);
+
+    const updateUserLambdaRole = new Role(this, "updateUserLambdaRole", {
+      assumedBy: new ServicePrincipal("lambda.amazonaws.com"),
+      managedPolicies: [ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole")],
+    });
+    // add Policy for PutItem
+    const dynamoDbUpdateItemPolicy = new Policy(this, "dynamoDbUpdateItem", {
+      statements: [
+        new PolicyStatement({
+          actions: ["dynamodb:UpdateItem"],
+          resources: [dynamoDbGlobalTable.attrArn],
+        }),
+      ],
+    });
+    dynamoDbUpdateItemPolicy.attachToRole(updateUserLambdaRole);
+
+    const deleteUserLambdaRole = new Role(this, "deleteUserLambdaRole", {
+      assumedBy: new ServicePrincipal("lambda.amazonaws.com"),
+      managedPolicies: [ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole")],
+    });
+    // add Policy for PutItem
+    const dynamoDbDeleteItemPolicy = new Policy(this, "dynamoDbDeleteItem", {
+      statements: [
+        new PolicyStatement({
+          actions: ["dynamodb:DeleteItem"],
+          resources: [dynamoDbGlobalTable.attrArn],
+        }),
+      ],
+    });
+    dynamoDbDeleteItemPolicy.attachToRole(deleteUserLambdaRole);
 
     // create Lambda for PutItem
     const postConfirmationLambda = new NodejsFunction(this, "postConfirmation", {
@@ -76,6 +107,22 @@ export class MainRegionStack extends cdk.Stack {
       runtime: Runtime.NODEJS_18_X,
       role: postConfirmationLambdaRole,
       memorySize: 1024,
+    });
+
+    // create Lambda for updateUser
+    const updateUserLambda = new NodejsFunction(this, "updateUser", {
+      entry: "lambda/update-user/index.ts",
+      handler: "handler",
+      runtime: Runtime.NODEJS_18_X,
+      role: updateUserLambdaRole,
+    });
+
+    // create Lambda for deleteUser
+    const deleteUserLambda = new NodejsFunction(this, "deleteUser", {
+      entry: "lambda/delete-user/index.ts",
+      handler: "handler",
+      runtime: Runtime.NODEJS_18_X,
+      role: deleteUserLambdaRole,
     });
 
     // create Cognito userpool
@@ -127,5 +174,13 @@ export class MainRegionStack extends cdk.Stack {
     cfnUserPool.userAttributeUpdateSettings = {
       attributesRequireVerificationBeforeUpdate: ["email"],
     };
+
+    const userConfigApi = new RestApi(this, "userConfig");
+    const usersResource = userConfigApi.root.addResource("users");
+    const updateUserApi = usersResource.addResource("me").addMethod("PUT", new LambdaIntegration(updateUserLambda));
+    const deleteUserApi = usersResource
+      .addResource("userId")
+      .resourceForPath("{userId}")
+      .addMethod("DELETE", new LambdaIntegration(deleteUserLambda));
   }
 }
