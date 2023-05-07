@@ -6,7 +6,6 @@ import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import { UserPool, CfnUserPool } from "aws-cdk-lib/aws-cognito";
 import { BACKUP_REGION, MAIN_REGION } from "../bin/cognito-dr";
 import { DYNAMODB_TABLE_NAME } from "../const";
-import { aws_apigateway } from "aws-cdk-lib";
 import { LambdaIntegration, RestApi } from "aws-cdk-lib/aws-apigateway";
 import { ManagedPolicy, Policy, PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam";
 
@@ -22,19 +21,11 @@ export class MainRegionStack extends cdk.Stack {
           attributeName: "userName",
           attributeType: "S",
         },
-        {
-          attributeName: "email",
-          attributeType: "S",
-        },
       ],
       keySchema: [
         {
           attributeName: "userName",
           keyType: "HASH",
-        },
-        {
-          attributeName: "email",
-          keyType: "RANGE",
         },
       ],
       replicas: [
@@ -109,22 +100,6 @@ export class MainRegionStack extends cdk.Stack {
       memorySize: 1024,
     });
 
-    // create Lambda for updateUser
-    const updateUserLambda = new NodejsFunction(this, "updateUser", {
-      entry: "lambda/update-user/index.ts",
-      handler: "handler",
-      runtime: Runtime.NODEJS_18_X,
-      role: updateUserLambdaRole,
-    });
-
-    // create Lambda for deleteUser
-    const deleteUserLambda = new NodejsFunction(this, "deleteUser", {
-      entry: "lambda/delete-user/index.ts",
-      handler: "handler",
-      runtime: Runtime.NODEJS_18_X,
-      role: deleteUserLambdaRole,
-    });
-
     // create Cognito userpool
     const userPool = new UserPool(this, "userPool", {
       userPoolName: "MainUserPool",
@@ -175,12 +150,32 @@ export class MainRegionStack extends cdk.Stack {
       attributesRequireVerificationBeforeUpdate: ["email"],
     };
 
+    // create Lambda for updateUser
+    const updateUserLambda = new NodejsFunction(this, "updateUser", {
+      entry: "lambda/update-user/index.ts",
+      handler: "handler",
+      runtime: Runtime.NODEJS_18_X,
+      role: updateUserLambdaRole,
+      environment: {
+        USER_POOL_ID: userPool.userPoolId,
+      },
+    });
+
+    // create Lambda for deleteUser
+    const deleteUserLambda = new NodejsFunction(this, "deleteUser", {
+      entry: "lambda/delete-user/index.ts",
+      handler: "handler",
+      runtime: Runtime.NODEJS_18_X,
+      role: deleteUserLambdaRole,
+      environment: {
+        USER_POOL_ID: userPool.userPoolId,
+      },
+    });
+
     const userConfigApi = new RestApi(this, "userConfig");
     const usersResource = userConfigApi.root.addResource("users");
-    const updateUserApi = usersResource.addResource("me").addMethod("PUT", new LambdaIntegration(updateUserLambda));
-    const deleteUserApi = usersResource
-      .addResource("userId")
-      .resourceForPath("{userId}")
-      .addMethod("DELETE", new LambdaIntegration(deleteUserLambda));
+    const userIdResource = usersResource.resourceForPath("{userId}");
+    userIdResource.addMethod("PUT", new LambdaIntegration(updateUserLambda));
+    userIdResource.addMethod("DELETE", new LambdaIntegration(deleteUserLambda));
   }
 }

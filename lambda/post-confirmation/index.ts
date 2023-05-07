@@ -4,6 +4,7 @@ import { DYNAMODB_TABLE_NAME } from "../../const";
 
 export const handler = async (event: PostConfirmationTriggerEvent) => {
   try {
+    // Backup user data to DynamoDB
     const db = new DynamoDB.DocumentClient();
     console.log(event);
     const userName = event.userName;
