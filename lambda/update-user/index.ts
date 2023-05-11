@@ -29,12 +29,12 @@ export const handler = async (event: APIGatewayProxyEvent, context: APIGatewayEv
       })
       .promise();
 
-    console.log("update cognito result: ", result);
+    console.log("update user result: ", result);
 
     // Update user data in DynamoDB
     const db = new DynamoDB.DocumentClient();
 
-    const res = await db
+    await db
       .update({
         TableName: DYNAMODB_TABLE_NAME,
         Key: {
@@ -46,7 +46,7 @@ export const handler = async (event: APIGatewayProxyEvent, context: APIGatewayEv
         },
       })
       .promise();
-    console.log(res);
+
     callback(null, {
       statusCode: 200,
       body: "OK",

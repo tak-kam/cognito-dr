@@ -4,8 +4,7 @@ import { CfnGlobalTable } from "aws-cdk-lib/aws-dynamodb";
 import { Runtime } from "aws-cdk-lib/aws-lambda";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import { UserPool, CfnUserPool } from "aws-cdk-lib/aws-cognito";
-import { BACKUP_REGION, MAIN_REGION } from "../bin/cognito-dr";
-import { DYNAMODB_TABLE_NAME } from "../const";
+import { BACKUP_REGION, DYNAMODB_TABLE_NAME, MAIN_REGION } from "../const";
 import { LambdaIntegration, RestApi } from "aws-cdk-lib/aws-apigateway";
 import { ManagedPolicy, Policy, PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam";
 
@@ -60,36 +59,6 @@ export class MainRegionStack extends cdk.Stack {
       ],
     });
     dynamoDbPutItemPolicy.attachToRole(postConfirmationLambdaRole);
-
-    const updateUserLambdaRole = new Role(this, "updateUserLambdaRole", {
-      assumedBy: new ServicePrincipal("lambda.amazonaws.com"),
-      managedPolicies: [ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole")],
-    });
-    // add Policy for PutItem
-    const dynamoDbUpdateItemPolicy = new Policy(this, "dynamoDbUpdateItem", {
-      statements: [
-        new PolicyStatement({
-          actions: ["dynamodb:UpdateItem"],
-          resources: [dynamoDbGlobalTable.attrArn],
-        }),
-      ],
-    });
-    dynamoDbUpdateItemPolicy.attachToRole(updateUserLambdaRole);
-
-    const deleteUserLambdaRole = new Role(this, "deleteUserLambdaRole", {
-      assumedBy: new ServicePrincipal("lambda.amazonaws.com"),
-      managedPolicies: [ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole")],
-    });
-    // add Policy for PutItem
-    const dynamoDbDeleteItemPolicy = new Policy(this, "dynamoDbDeleteItem", {
-      statements: [
-        new PolicyStatement({
-          actions: ["dynamodb:DeleteItem"],
-          resources: [dynamoDbGlobalTable.attrArn],
-        }),
-      ],
-    });
-    dynamoDbDeleteItemPolicy.attachToRole(deleteUserLambdaRole);
 
     // create Lambda for PutItem
     const postConfirmationLambda = new NodejsFunction(this, "postConfirmation", {
@@ -149,6 +118,58 @@ export class MainRegionStack extends cdk.Stack {
     cfnUserPool.userAttributeUpdateSettings = {
       attributesRequireVerificationBeforeUpdate: ["email"],
     };
+
+    // Role for updating user attributes
+    const updateUserLambdaRole = new Role(this, "updateUserLambdaRole", {
+      assumedBy: new ServicePrincipal("lambda.amazonaws.com"),
+      managedPolicies: [ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole")],
+    });
+    // add Policy for PutItem
+    const dynamoDbUpdateItemPolicy = new Policy(this, "dynamoDbUpdateItem", {
+      statements: [
+        new PolicyStatement({
+          actions: ["dynamodb:UpdateItem"],
+          resources: [dynamoDbGlobalTable.attrArn],
+        }),
+      ],
+    });
+    dynamoDbUpdateItemPolicy.attachToRole(updateUserLambdaRole);
+    // add policy for AdminUpdateUserAttributes
+    const updateCognitoUserPolicy = new Policy(this, "updateCognitoUserPolicy", {
+      statements: [
+        new PolicyStatement({
+          actions: ["cognito-idp:AdminUpdateUserAttributes"],
+          resources: [userPool.userPoolArn],
+        }),
+      ],
+    });
+    updateCognitoUserPolicy.attachToRole(updateUserLambdaRole);
+
+    // Role for deleting user attributes
+    const deleteUserLambdaRole = new Role(this, "deleteUserLambdaRole", {
+      assumedBy: new ServicePrincipal("lambda.amazonaws.com"),
+      managedPolicies: [ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole")],
+    });
+    // add policy for PutItem
+    const dynamoDbDeleteItemPolicy = new Policy(this, "dynamoDbDeleteItem", {
+      statements: [
+        new PolicyStatement({
+          actions: ["dynamodb:DeleteItem"],
+          resources: [dynamoDbGlobalTable.attrArn],
+        }),
+      ],
+    });
+    dynamoDbDeleteItemPolicy.attachToRole(deleteUserLambdaRole);
+    // add policy for AdminDeleteUser
+    const deleteCognitoUserPolicy = new Policy(this, "deleteCognitoUserPolicy", {
+      statements: [
+        new PolicyStatement({
+          actions: ["cognito-idp:AdminDeleteUser"],
+          resources: [userPool.userPoolArn],
+        }),
+      ],
+    });
+    deleteCognitoUserPolicy.attachToRole(deleteUserLambdaRole);
 
     // create Lambda for updateUser
     const updateUserLambda = new NodejsFunction(this, "updateUser", {
