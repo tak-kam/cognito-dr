@@ -6,7 +6,7 @@ import { BACKUP_REGION, MAIN_REGION } from "../const";
 import { BackupRegionStack } from "../lib/backup-region-stack";
 
 const app = new cdk.App();
-new MainRegionStack(app, "MainRegionStack", {
+const mainRegionStack = new MainRegionStack(app, "MainRegionStack", {
   env: {
     region: MAIN_REGION,
   },
@@ -16,4 +16,4 @@ new BackupRegionStack(app, "BackupRegionStack", {
   env: {
     region: BACKUP_REGION,
   },
-});
+}).addDependency(mainRegionStack);
