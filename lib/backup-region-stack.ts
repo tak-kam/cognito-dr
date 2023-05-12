@@ -52,8 +52,8 @@ export class BackupRegionStack extends cdk.Stack {
       managedPolicies: [ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole")],
     });
 
-    const onCreateUser = new NodejsFunction(this, "onCreateUser", {
-      entry: "lambda/on-update-user/index.ts",
+    const onStreamsUpdate = new NodejsFunction(this, "onStreamsUpdate", {
+      entry: "lambda/on-streams-update/index.ts",
       handler: "handler",
       runtime: Runtime.NODEJS_18_X,
       role: role,
@@ -62,6 +62,6 @@ export class BackupRegionStack extends cdk.Stack {
       },
     });
 
-    onCreateUser.addEventSource(new DynamoEventSource(userBackupTable, { startingPosition: StartingPosition.TRIM_HORIZON }));
+    onStreamsUpdate.addEventSource(new DynamoEventSource(userBackupTable, { startingPosition: StartingPosition.TRIM_HORIZON }));
   }
 }
