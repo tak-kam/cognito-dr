@@ -20,6 +20,7 @@ export class BackupRegionStack extends cdk.Stack {
       userPoolName: "BackupUserPool",
     });
 
+    // AWS SDK call to get DynamoDBStreams
     const awsSdkCall: AwsSdkCall = {
       service: "DynamoDBStreams",
       action: "listStreams",
@@ -30,6 +31,7 @@ export class BackupRegionStack extends cdk.Stack {
       },
     };
 
+    // Custom resource to get DynamoDBStreams
     const call = new AwsCustomResource(this, `${DYNAMODB_TABLE_NAME}GetTableStreams`, {
       onCreate: awsSdkCall,
       onUpdate: awsSdkCall,
@@ -41,6 +43,8 @@ export class BackupRegionStack extends cdk.Stack {
         }),
       ]),
     });
+
+    // Get DynamoDB global table
     const userBackupTable = Table.fromTableAttributes(this, DYNAMODB_TABLE_NAME, {
       tableName: DYNAMODB_TABLE_NAME,
       tableStreamArn: call.getResponseField("Streams.0.StreamArn"),
