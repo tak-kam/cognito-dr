@@ -5,7 +5,7 @@ import { Runtime, StartingPosition } from "aws-cdk-lib/aws-lambda";
 import { UserPool } from "aws-cdk-lib/aws-cognito";
 import { DYNAMODB_TABLE_NAME } from "../const";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
-import { ManagedPolicy, PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam";
+import { ManagedPolicy, Policy, PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam";
 import { DynamoEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import { AwsCustomResource, AwsCustomResourcePolicy, AwsSdkCall, PhysicalResourceId } from "aws-cdk-lib/custom-resources";
 import { Stack } from "aws-cdk-lib";
@@ -51,16 +51,27 @@ export class BackupRegionStack extends cdk.Stack {
     });
 
     // Role for lambda
-    const role = new Role(this, "Role", {
+    const onStreamsUpdateRole = new Role(this, "Role", {
       assumedBy: new ServicePrincipal("lambda.amazonaws.com"),
       managedPolicies: [ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole")],
     });
+
+    // add policy for AdminDeleteUser
+    const editCognitoUserPolicy = new Policy(this, "editCognitoUserPolicy", {
+      statements: [
+        new PolicyStatement({
+          actions: ["cognito-idp:AdminCreateUser", "cognito-idp:AdminUpdateUserAttributes", "cognito-idp:AdminDeleteUser"],
+          resources: [userPool.userPoolArn],
+        }),
+      ],
+    });
+    editCognitoUserPolicy.attachToRole(onStreamsUpdateRole);
 
     const onStreamsUpdate = new NodejsFunction(this, "onStreamsUpdate", {
       entry: "lambda/on-streams-update/index.ts",
       handler: "handler",
       runtime: Runtime.NODEJS_18_X,
-      role: role,
+      role: onStreamsUpdateRole,
       environment: {
         USER_POOL_ID: userPool.userPoolId,
       },
